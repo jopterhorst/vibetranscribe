@@ -1,0 +1,22 @@
+# Mendix project files
+*.mpr.lock
+*.mpr.bak
+deployment/
+*.log
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# Build artifacts
+*.class

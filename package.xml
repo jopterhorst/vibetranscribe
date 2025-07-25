@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://www.mendix.com/package/1.0/">
+  <modelerProject xmlns="http://www.mendix.com/modelerProject/1.0/">
+    <module name="VibeTranscribe" />
+    <projectFile path="project.mpr" />
+    <files>
+      <file path="README.md" />
+      <file path="resources/vibetranscribe/README.md" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/README" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/am/final.mdl" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/conf/mfcc.conf" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/conf/model.conf" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/graph/disambig_tid.int" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/graph/Gr.fst" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/graph/HCLr.fst" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/ivector/final.dubm" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/ivector/final.ie" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/ivector/final.mat" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/ivector/global_cmvn.stats" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/ivector/online_cmvn.conf" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/ivector/splice.conf" />
+      <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/graph/phones/word_boundary.int" />
+      <file path="userlib/jackson-annotations-2.15.2.jar" />
+      <file path="userlib/jackson-core-2.15.2.jar" />
+      <file path="userlib/jackson-databind-2.15.2.jar" />
+      <file path="userlib/jna-5.14.0.jar" />
+      <file path="userlib/vosk-0.3.45.jar" />
+      <file path="javasource/vibetranscribe/actions/TranscribeAudioFile.java" />
+      <file path="themesource/vibetranscribe/settings.json" />
+      <file path="themesource/vibetranscribe/native/design-properties.json" />
+      <file path="themesource/vibetranscribe/native/main.js" />
+      <file path="themesource/vibetranscribe/web/design-properties.json" />
+      <file path="themesource/vibetranscribe/web/main.scss" />
+    </files>
+  </modelerProject>
+</package>
