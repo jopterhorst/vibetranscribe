@@ -32,11 +32,9 @@ After importing, the module provides:
 
 - **Java Action**: `TranscribeAudioFile` - Main transcription functionality
 - **Required Libraries**: 
-  - `vosk-0.3.45.jar` - Vosk speech recognition library
-  - `jna-5.17.0.jar` - Java Native Access for native library integration
-  - `jackson-annotations-2.19.2.jar` - JSON processing
-  - `jackson-core-2.19.2.jar` - JSON processing core
-  - `jackson-databind-2.19.2.jar` - JSON data binding
+  - `vosk-0.3.45.jar` - Vosk speech recognition library (included in userlib)
+  - Jackson libraries (2.19.2) - JSON processing (automatically managed by Mendix)
+  - JNA (5.17.0) - Java Native Access (automatically managed by Mendix)
 - **Vosk Model**: Pre-trained English language model (`vosk-model-small-en-us-0.15`)
 
 ### 3. Usage
