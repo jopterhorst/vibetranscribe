@@ -4,7 +4,11 @@
     <module name="VibeTranscribe" />
     <projectFile path="project.mpr" />
     <files>
-      <file path="README.md" />
+      <file path="vendorlib/jackson-annotations-2.19.2.jar" />
+      <file path="vendorlib/jackson-core-2.19.2.jar" />
+      <file path="vendorlib/jackson-databind-2.19.2.jar" />
+      <file path="vendorlib/jna-5.17.0.jar" />
+      <file path="vendorlib/vosk-0.3.45.jar" />
       <file path="resources/vibetranscribe/README.md" />
       <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/README" />
       <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/am/final.mdl" />
@@ -20,11 +24,6 @@
       <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/ivector/online_cmvn.conf" />
       <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/ivector/splice.conf" />
       <file path="resources/vibetranscribe/vosk-model-small-en-us-0.15/graph/phones/word_boundary.int" />
-      <file path="userlib/jackson-annotations-2.15.2.jar" />
-      <file path="userlib/jackson-core-2.15.2.jar" />
-      <file path="userlib/jackson-databind-2.15.2.jar" />
-      <file path="userlib/jna-5.14.0.jar" />
-      <file path="userlib/vosk-0.3.45.jar" />
       <file path="javasource/vibetranscribe/actions/TranscribeAudioFile.java" />
       <file path="themesource/vibetranscribe/settings.json" />
       <file path="themesource/vibetranscribe/native/design-properties.json" />

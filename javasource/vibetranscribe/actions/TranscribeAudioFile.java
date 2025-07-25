@@ -27,19 +27,19 @@ import com.mendix.core.Core;
 
 public class TranscribeAudioFile extends UserAction<java.lang.String>
 {
-	/** @deprecated use Parameter.getMendixObject() instead. */
+	/** @deprecated use AudioFile.getMendixObject() instead. */
 	@java.lang.Deprecated(forRemoval = true)
-	private final IMendixObject __Parameter;
-	private final system.proxies.FileDocument Parameter;
+	private final IMendixObject __AudioFile;
+	private final system.proxies.FileDocument AudioFile;
 
 	public TranscribeAudioFile(
 		IContext context,
-		IMendixObject _parameter
+		IMendixObject _audioFile
 	)
 	{
 		super(context);
-		this.__Parameter = _parameter;
-		this.Parameter = _parameter == null ? null : system.proxies.FileDocument.initialize(getContext(), _parameter);
+		this.__AudioFile = _audioFile;
+		this.AudioFile = _audioFile == null ? null : system.proxies.FileDocument.initialize(getContext(), _audioFile);
 	}
 
 	@java.lang.Override
@@ -47,14 +47,14 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 	{
 		// BEGIN USER CODE
 		long startTime = System.currentTimeMillis();
-		logger.info("Starting Vosk transcription: " + (Parameter != null ? Parameter.getName() : "unknown file"));
+		logger.info("Starting Vosk transcription: " + (AudioFile != null ? AudioFile.getName() : "unknown file"));
 		
-		if (Parameter == null || !Parameter.getHasContents()) {
+		if (AudioFile == null || !AudioFile.getHasContents()) {
 			logger.error("No audio file provided");
 			throw new com.mendix.systemwideinterfaces.MendixRuntimeException("No audio file provided or file is empty");
 		}
 
-		String fileName = Parameter.getName();
+		String fileName = AudioFile.getName();
 		
 		// Validate audio format
 		if (!isValidAudioFormat(fileName)) {
@@ -74,7 +74,7 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 			
 			// Get the audio file content as byte array
 			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-			Parameter.getContents(getContext(), outputStream);
+			AudioFile.getContents(getContext(), outputStream);
 			byte[] audioBytes = outputStream.toByteArray();
 			
 			// Analyze and convert audio if needed
