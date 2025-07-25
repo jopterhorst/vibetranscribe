@@ -31,10 +31,10 @@ To implement VibeTranscribe in your Mendix project:
 After importing, the module provides:
 
 - **Java Action**: `TranscribeAudioFile` - Main transcription functionality
-- **Required Libraries**: 
-  - `vosk-0.3.45.jar` - Vosk speech recognition library (included in userlib)
-  - Jackson libraries (2.19.2) - JSON processing (automatically managed by Mendix)
-  - JNA (5.17.0) - Java Native Access (automatically managed by Mendix)
+- **Required Libraries** (automatically managed by Mendix/Gradle): 
+  - Vosk (0.3.45) - Speech recognition library (`com.alphacephei:vosk`)
+  - Jackson libraries (2.19.2) - JSON processing (`com.fasterxml.jackson.core`)
+  - JNA (5.17.0) - Java Native Access (`net.java.dev.jna:jna`)
 - **Vosk Model**: Pre-trained English language model (`vosk-model-small-en-us-0.15`)
 
 ### 3. Usage
@@ -69,6 +69,43 @@ After importing, the module provides:
 - **Empty Result**: Returns informative message if no speech is detected
 
 ## Technical Details
+
+### Dependencies
+
+This module relies on the following Maven dependencies that are automatically managed by Mendix:
+
+```xml
+<!-- Vosk Speech Recognition -->
+<dependency>
+    <groupId>com.alphacephei</groupId>
+    <artifactId>vosk</artifactId>
+    <version>0.3.45</version>
+</dependency>
+
+<!-- Jackson JSON Processing -->
+<dependency>
+    <groupId>com.fasterxml.jackson.core</groupId>
+    <artifactId>jackson-core</artifactId>
+    <version>2.19.2</version>
+</dependency>
+<dependency>
+    <groupId>com.fasterxml.jackson.core</groupId>
+    <artifactId>jackson-databind</artifactId>
+    <version>2.19.2</version>
+</dependency>
+<dependency>
+    <groupId>com.fasterxml.jackson.core</groupId>
+    <artifactId>jackson-annotations</artifactId>
+    <version>2.19.2</version>
+</dependency>
+
+<!-- Java Native Access -->
+<dependency>
+    <groupId>net.java.dev.jna</groupId>
+    <artifactId>jna</artifactId>
+    <version>5.17.0</version>
+</dependency>
+```
 
 ### Audio Processing
 
