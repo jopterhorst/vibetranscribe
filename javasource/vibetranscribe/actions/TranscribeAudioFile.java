@@ -22,24 +22,43 @@ import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import com.mendix.logging.ILogNode;
 import com.mendix.core.Core;
 
+/**
+ * https://github.com/jopterhorst/vibetranscribe
+ */
 public class TranscribeAudioFile extends UserAction<java.lang.String>
 {
 	/** @deprecated use AudioFile.getMendixObject() instead. */
 	@java.lang.Deprecated(forRemoval = true)
 	private final IMendixObject __AudioFile;
 	private final system.proxies.FileDocument AudioFile;
+	/** @deprecated use VoskModel.getMendixObject() instead. */
+	@java.lang.Deprecated(forRemoval = true)
+	private final IMendixObject __VoskModel;
+	private final system.proxies.FileDocument VoskModel;
 
 	public TranscribeAudioFile(
 		IContext context,
-		IMendixObject _audioFile
+		IMendixObject _audioFile,
+		IMendixObject _voskModel
 	)
 	{
 		super(context);
 		this.__AudioFile = _audioFile;
 		this.AudioFile = _audioFile == null ? null : system.proxies.FileDocument.initialize(getContext(), _audioFile);
+		this.__VoskModel = _voskModel;
+		this.VoskModel = _voskModel == null ? null : system.proxies.FileDocument.initialize(getContext(), _voskModel);
 	}
 
 	@java.lang.Override
@@ -54,6 +73,11 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 			throw new com.mendix.systemwideinterfaces.MendixRuntimeException("No audio file provided or file is empty");
 		}
 
+		if (VoskModel == null || !VoskModel.getHasContents()) {
+			logger.error("No Vosk model provided");
+			throw new com.mendix.systemwideinterfaces.MendixRuntimeException("No Vosk model provided or model file is empty");
+		}
+
 		String fileName = AudioFile.getName();
 		
 		// Validate audio format
@@ -65,88 +89,128 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 			// Set Vosk log level
 			LibVosk.setLogLevel(LogLevel.WARNINGS);
 			
-			// Initialize Vosk model
-			String modelPath = getModelPath();
+			// Extract and initialize Vosk model
+			String modelPath = extractVoskModel();
 			logger.info("Loading Vosk model from: " + modelPath);
 			
-			Model model = new Model(modelPath);
-			Recognizer recognizer = new Recognizer(model, 16000);
+			Model model = null;
+			Recognizer recognizer = null;
+			InputStream audioStream = null;
+			ByteArrayOutputStream outputStream = null;
 			
-			// Get the audio file content as byte array
-			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-			AudioFile.getContents(getContext(), outputStream);
-			byte[] audioBytes = outputStream.toByteArray();
-			
-			// Analyze and convert audio if needed
-			audioBytes = analyzeAndConvertAudio(audioBytes, fileName);
-			
-			// Create input stream and skip WAV header if present
-			InputStream audioStream = new ByteArrayInputStream(audioBytes);
-			if (audioBytes.length > 44 && isWavFile(audioBytes)) {
-				audioStream.skip(44); // Skip WAV header
-				logger.info("Skipped WAV header for processing");
-			}
-			
-			// Process audio in chunks for Vosk
-			byte[] buffer = new byte[4096];
-			int bytesRead;
-			StringBuilder transcriptionResult = new StringBuilder();
-			ObjectMapper mapper = new ObjectMapper();
-			
-			while ((bytesRead = audioStream.read(buffer)) != -1) {
-				if (recognizer.acceptWaveForm(buffer, bytesRead)) {
-					String result = recognizer.getResult();
-					JsonNode resultJson = mapper.readTree(result);
-					String text = resultJson.get("text").asText();
-					if (!text.trim().isEmpty()) {
-						if (transcriptionResult.length() > 0) {
-							transcriptionResult.append(" ");
+			try {
+				model = new Model(modelPath);
+				recognizer = new Recognizer(model, 16000);
+				
+				// Get the audio file content as byte array
+				outputStream = new ByteArrayOutputStream();
+				AudioFile.getContents(getContext(), outputStream);
+				byte[] audioBytes = outputStream.toByteArray();
+				
+				// Analyze and convert audio if needed
+				audioBytes = analyzeAndConvertAudio(audioBytes, fileName);
+				
+				// Create input stream and skip WAV header if present
+				audioStream = new ByteArrayInputStream(audioBytes);
+				if (audioBytes.length > 44 && isWavFile(audioBytes)) {
+					audioStream.skip(44); // Skip WAV header
+					logger.info("Skipped WAV header for processing");
+				}
+				
+				// Process audio in chunks for Vosk
+				byte[] buffer = new byte[4096];
+				int bytesRead;
+				StringBuilder transcriptionResult = new StringBuilder();
+				ObjectMapper mapper = new ObjectMapper();
+				
+				while ((bytesRead = audioStream.read(buffer)) != -1) {
+					if (recognizer.acceptWaveForm(buffer, bytesRead)) {
+						String result = recognizer.getResult();
+						JsonNode resultJson = mapper.readTree(result);
+						String text = resultJson.get("text").asText();
+						if (!text.trim().isEmpty()) {
+							if (transcriptionResult.length() > 0) {
+								transcriptionResult.append(" ");
+							}
+							transcriptionResult.append(text.trim());
+							logger.debug("Partial result: " + text);
 						}
-						transcriptionResult.append(text.trim());
-						logger.debug("Partial result: " + text);
 					}
 				}
-			}
-			
-			// Get final result
-			String finalResult = recognizer.getFinalResult();
-			JsonNode finalJson = mapper.readTree(finalResult);
-			String finalText = finalJson.get("text").asText();
-			if (!finalText.trim().isEmpty()) {
-				if (transcriptionResult.length() > 0) {
-					transcriptionResult.append(" ");
+				
+				// Get final result
+				String finalResult = recognizer.getFinalResult();
+				JsonNode finalJson = mapper.readTree(finalResult);
+				String finalText = finalJson.get("text").asText();
+				if (!finalText.trim().isEmpty()) {
+					if (transcriptionResult.length() > 0) {
+						transcriptionResult.append(" ");
+					}
+					transcriptionResult.append(finalText.trim());
 				}
-				transcriptionResult.append(finalText.trim());
+				
+				// Calculate timing
+				long endTime = System.currentTimeMillis();
+				double transcriptionTimeSeconds = (endTime - startTime) / 1000.0;
+				
+				String finalTranscription = transcriptionResult.toString().trim();
+				
+				if (finalTranscription.isEmpty()) {
+					logger.warn("No speech detected in audio file");
+					logger.info("Vosk transcription completed in " + String.format("%.2f", transcriptionTimeSeconds) + " seconds");
+					return "No speech detected in the audio file. Please ensure the audio contains clear speech and is in WAV format (16kHz, 16-bit, mono recommended).";
+				}
+				
+				logger.info("Vosk transcription completed successfully in " + String.format("%.2f", transcriptionTimeSeconds) + " seconds");
+				logger.info("Final result: '" + finalTranscription + "' (" + finalTranscription.length() + " chars)");
+				
+				return finalTranscription;
+				
+			} finally {
+				// Clean up resources
+				if (audioStream != null) {
+					try { audioStream.close(); } catch (Exception e) { logger.warn("Failed to close audio stream: " + e.getMessage()); }
+				}
+				if (outputStream != null) {
+					try { outputStream.close(); } catch (Exception e) { logger.warn("Failed to close output stream: " + e.getMessage()); }
+				}
+				if (recognizer != null) {
+					try { recognizer.close(); } catch (Exception e) { logger.warn("Failed to close recognizer: " + e.getMessage()); }
+				}
+				if (model != null) {
+					try { model.close(); } catch (Exception e) { logger.warn("Failed to close model: " + e.getMessage()); }
+				}
+				
+				// Clean up temporary model directory (only if not cached)
+				try {
+					File tempModelDir = new File(modelPath).getParentFile();
+					if (tempModelDir.getName().startsWith("vosk-model-")) {
+						// Check if this model is cached - if so, don't delete it
+						boolean isCached = false;
+						for (String cachedPath : modelCache.values()) {
+							if (cachedPath.equals(modelPath)) {
+								isCached = true;
+								break;
+							}
+						}
+						
+						if (!isCached) {
+							deleteDirectory(tempModelDir);
+							logger.info("Cleaned up temporary model directory: " + tempModelDir.getAbsolutePath());
+						} else {
+							logger.info("Model is cached, skipping cleanup: " + tempModelDir.getAbsolutePath());
+						}
+					}
+				} catch (Exception cleanupEx) {
+					logger.warn("Failed to cleanup temporary model directory: " + cleanupEx.getMessage());
+				}
 			}
-			
-			// Clean up resources
-			audioStream.close();
-			outputStream.close();
-			recognizer.close();
-			model.close();
-			
-			// Calculate timing
-			long endTime = System.currentTimeMillis();
-			double transcriptionTimeSeconds = (endTime - startTime) / 1000.0;
-			
-			String finalTranscription = transcriptionResult.toString().trim();
-			
-			if (finalTranscription.isEmpty()) {
-				logger.warn("No speech detected in audio file");
-				logger.info("Vosk transcription completed in " + String.format("%.2f", transcriptionTimeSeconds) + " seconds");
-				return "No speech detected in the audio file. Please ensure the audio contains clear speech and is in WAV format (16kHz, 16-bit, mono recommended).";
-			}
-			
-			logger.info("Vosk transcription completed successfully in " + String.format("%.2f", transcriptionTimeSeconds) + " seconds");
-			logger.info("Final result: '" + finalTranscription + "' (" + finalTranscription.length() + " chars)");
-			
-			return finalTranscription;
 			
 		} catch (Exception e) {
 			logger.error("Vosk transcription failed: " + e.getMessage(), e);
 			throw new com.mendix.systemwideinterfaces.MendixRuntimeException(
 				"Error during Vosk audio transcription: " + e.getMessage() + 
-				". Please ensure the audio file is in a supported format and the Vosk model is properly installed.", e);
+				". Please ensure the audio file is in a supported format and the Vosk model is properly uploaded and valid.", e);
 		}
 		// END USER CODE
 	}
@@ -164,33 +228,253 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 	// BEGIN EXTRA CODE
 	private static final ILogNode logger = Core.getLogger("VibeTranscribe");
 	
+	// Model cache - maps model hash to extracted directory path
+	private static final ConcurrentHashMap<String, String> modelCache = new ConcurrentHashMap<>();
+	
+	// Cache cleanup tracking
+	private static final ConcurrentHashMap<String, Long> cacheAccessTime = new ConcurrentHashMap<>();
+	private static final long CACHE_CLEANUP_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+	private static final long CACHE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
+	
 	/**
-	 * Get the path to the Vosk model directory
+	 * Extract and prepare the Vosk model from the uploaded ZIP file with caching
 	 */
-	private String getModelPath() {
-		// Try different possible locations for the model
-		String[] possiblePaths = {
-			"resources/vibetranscribe/vosk-model-small-en-us-0.15",
-			"./resources/vibetranscribe/vosk-model-small-en-us-0.15",
-			"../resources/vibetranscribe/vosk-model-small-en-us-0.15",
-			System.getProperty("user.dir") + "/resources/vibetranscribe/vosk-model-small-en-us-0.15",
-			"userlib/vosk-model-small-en-us-0.15",
-			"./userlib/vosk-model-small-en-us-0.15",
-			"../userlib/vosk-model-small-en-us-0.15",
-			System.getProperty("user.dir") + "/userlib/vosk-model-small-en-us-0.15"
-		};
+	private String extractVoskModel() throws Exception {
+		// Calculate hash of the model content for caching
+		ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+		VoskModel.getContents(getContext(), outputStream);
+		byte[] zipBytes = outputStream.toByteArray();
+		outputStream.close();
 		
-		for (String path : possiblePaths) {
-			File modelDir = new File(path);
-			if (modelDir.exists() && modelDir.isDirectory()) {
-				logger.info("Found Vosk model at: " + modelDir.getAbsolutePath());
-				return modelDir.getAbsolutePath();
+		String modelHash = calculateModelHash(zipBytes);
+		logger.info("Model hash: " + modelHash);
+		
+		// Check if model is already cached and directory exists
+		String cachedPath = modelCache.get(modelHash);
+		if (cachedPath != null && new File(cachedPath).exists() && isVoskModelDirectory(new File(cachedPath))) {
+			// Update access time
+			cacheAccessTime.put(modelHash, System.currentTimeMillis());
+			logger.info("Using cached Vosk model: " + cachedPath);
+			return cachedPath;
+		} else if (cachedPath != null) {
+			// Cached path exists but directory is gone - remove from cache
+			modelCache.remove(modelHash);
+			cacheAccessTime.remove(modelHash);
+			logger.warn("Cached model directory no longer exists, will re-extract: " + cachedPath);
+		}
+		
+		// Clean up old cache entries periodically
+		cleanupOldCacheEntries();
+		
+		// Extract the model
+		String extractedPath = extractModelToFileSystem(zipBytes, modelHash);
+		
+		// Cache the result
+		modelCache.put(modelHash, extractedPath);
+		cacheAccessTime.put(modelHash, System.currentTimeMillis());
+		
+		logger.info("Successfully extracted and cached Vosk model: " + extractedPath);
+		return extractedPath;
+	}
+	
+	/**
+	 * Calculate SHA-256 hash of model content for caching
+	 */
+	private String calculateModelHash(byte[] zipBytes) throws Exception {
+		MessageDigest digest = MessageDigest.getInstance("SHA-256");
+		byte[] hash = digest.digest(zipBytes);
+		StringBuilder hexString = new StringBuilder();
+		for (byte b : hash) {
+			String hex = Integer.toHexString(0xff & b);
+			if (hex.length() == 1) {
+				hexString.append('0');
+			}
+			hexString.append(hex);
+		}
+		return hexString.toString().substring(0, 16); // Use first 16 chars for shorter paths
+	}
+	
+	/**
+	 * Extract model to file system with unique directory name
+	 */
+	private String extractModelToFileSystem(byte[] zipBytes, String modelHash) throws Exception {
+		// Create a directory name based on hash for consistency
+		String tempDir = System.getProperty("java.io.tmpdir");
+		String modelDirName = "vosk-model-" + modelHash;
+		Path modelPath = Paths.get(tempDir, modelDirName);
+		
+		try {
+			Files.createDirectories(modelPath);
+			logger.info("Created model directory: " + modelPath.toString());
+			
+			// Extract the ZIP file
+			extractZipFile(zipBytes, modelPath.toFile());
+			
+			// Find the actual model directory (it might be nested)
+			File actualModelDir = findVoskModelDirectory(modelPath.toFile());
+			if (actualModelDir == null) {
+				throw new Exception("Could not find valid Vosk model files in the uploaded ZIP");
+			}
+			
+			return actualModelDir.getAbsolutePath();
+			
+		} catch (Exception e) {
+			// Clean up on failure
+			try {
+				deleteDirectory(modelPath.toFile());
+			} catch (Exception cleanupEx) {
+				logger.warn("Failed to cleanup temporary directory: " + cleanupEx.getMessage());
+			}
+			throw e;
+		}
+	}
+	
+	/**
+	 * Clean up old cache entries to prevent unlimited growth
+	 */
+	private void cleanupOldCacheEntries() {
+		long currentTime = System.currentTimeMillis();
+		
+		// Only run cleanup occasionally
+		if (currentTime % CACHE_CLEANUP_INTERVAL > 1000) {
+			return;
+		}
+		
+		logger.info("Running cache cleanup...");
+		
+		// Find entries older than max age
+		for (String hash : cacheAccessTime.keySet()) {
+			Long accessTime = cacheAccessTime.get(hash);
+			if (accessTime != null && (currentTime - accessTime) > CACHE_MAX_AGE) {
+				String cachedPath = modelCache.get(hash);
+				if (cachedPath != null) {
+					try {
+						// Delete the cached directory
+						File cachedDir = new File(cachedPath).getParentFile();
+						if (cachedDir.getName().startsWith("vosk-model-")) {
+							deleteDirectory(cachedDir);
+							logger.info("Cleaned up old cached model: " + cachedDir.getAbsolutePath());
+						}
+					} catch (Exception e) {
+						logger.warn("Failed to cleanup old cache entry: " + e.getMessage());
+					}
+				}
+				
+				// Remove from cache
+				modelCache.remove(hash);
+				cacheAccessTime.remove(hash);
 			}
 		}
 		
-		// Default fallback - prefer resources/vibetranscribe location
-		logger.warn("Model not found in standard locations, using default resources path");
-		return "resources/vibetranscribe/vosk-model-small-en-us-0.15";
+		logger.info("Cache cleanup completed. Active entries: " + modelCache.size());
+	}
+	
+	/**
+	 * Extract ZIP file contents to target directory
+	 */
+	private void extractZipFile(byte[] zipBytes, File targetDir) throws IOException {
+		try (ZipInputStream zipStream = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+			ZipEntry entry;
+			while ((entry = zipStream.getNextEntry()) != null) {
+				File entryFile = new File(targetDir, entry.getName());
+				
+				// Security check - prevent directory traversal
+				if (!entryFile.getCanonicalPath().startsWith(targetDir.getCanonicalPath())) {
+					throw new IOException("ZIP entry is outside target directory: " + entry.getName());
+				}
+				
+				if (entry.isDirectory()) {
+					entryFile.mkdirs();
+				} else {
+					// Create parent directories if needed
+					entryFile.getParentFile().mkdirs();
+					
+					// Extract file
+					try (FileOutputStream fos = new FileOutputStream(entryFile)) {
+						byte[] buffer = new byte[1024];
+						int length;
+						while ((length = zipStream.read(buffer)) > 0) {
+							fos.write(buffer, 0, length);
+						}
+					}
+				}
+				zipStream.closeEntry();
+			}
+		}
+		logger.info("Successfully extracted ZIP file to: " + targetDir.getAbsolutePath());
+	}
+	
+	/**
+	 * Find the directory containing Vosk model files
+	 */
+	private File findVoskModelDirectory(File rootDir) {
+		return findVoskModelDirectoryRecursive(rootDir);
+	}
+	
+	/**
+	 * Recursively search for Vosk model directory
+	 */
+	private File findVoskModelDirectoryRecursive(File dir) {
+		// Check if current directory contains Vosk model files
+		if (isVoskModelDirectory(dir)) {
+			return dir;
+		}
+		
+		// Search subdirectories
+		File[] subdirs = dir.listFiles(File::isDirectory);
+		if (subdirs != null) {
+			for (File subdir : subdirs) {
+				File result = findVoskModelDirectoryRecursive(subdir);
+				if (result != null) {
+					return result;
+				}
+			}
+		}
+		
+		return null;
+	}
+	
+	/**
+	 * Check if directory contains required Vosk model files
+	 */
+	private boolean isVoskModelDirectory(File dir) {
+		if (!dir.isDirectory()) {
+			return false;
+		}
+		
+		// Check for essential Vosk model files/directories
+		String[] requiredItems = {"am", "graph", "conf"};
+		for (String item : requiredItems) {
+			File itemFile = new File(dir, item);
+			if (!itemFile.exists()) {
+				return false;
+			}
+		}
+		
+		logger.debug("Found valid Vosk model directory: " + dir.getAbsolutePath());
+		return true;
+	}
+	
+	/**
+	 * Recursively delete directory and all contents
+	 */
+	private void deleteDirectory(File dir) throws IOException {
+		if (!dir.exists()) {
+			return;
+		}
+		
+		if (dir.isDirectory()) {
+			File[] files = dir.listFiles();
+			if (files != null) {
+				for (File file : files) {
+					deleteDirectory(file);
+				}
+			}
+		}
+		
+		if (!dir.delete()) {
+			throw new IOException("Failed to delete: " + dir.getAbsolutePath());
+		}
 	}
 	
 	/**
