@@ -124,16 +124,19 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 				ObjectMapper mapper = new ObjectMapper();
 				
 				while ((bytesRead = audioStream.read(buffer)) != -1) {
-					if (recognizer.acceptWaveForm(buffer, bytesRead)) {
-						String result = recognizer.getResult();
-						JsonNode resultJson = mapper.readTree(result);
-						String text = resultJson.get("text").asText();
-						if (!text.trim().isEmpty()) {
-							if (transcriptionResult.length() > 0) {
-								transcriptionResult.append(" ");
+					// Validate bytesRead to ensure proper length parameter handling (CWE-130)
+					if (bytesRead > 0) {
+						if (recognizer.acceptWaveForm(buffer, bytesRead)) {
+							String result = recognizer.getResult();
+							JsonNode resultJson = mapper.readTree(result);
+							String text = resultJson.get("text").asText();
+							if (!text.trim().isEmpty()) {
+								if (transcriptionResult.length() > 0) {
+									transcriptionResult.append(" ");
+								}
+								transcriptionResult.append(text.trim());
+								logger.debug("Partial result: " + text);
 							}
-							transcriptionResult.append(text.trim());
-							logger.debug("Partial result: " + text);
 						}
 					}
 				}
