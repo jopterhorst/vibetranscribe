@@ -123,23 +123,52 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 				StringBuilder transcriptionResult = new StringBuilder();
 				ObjectMapper mapper = new ObjectMapper();
 				
-				while ((bytesRead = audioStream.read(buffer)) != -1) {
-					// Validate bytesRead to ensure proper length parameter handling (CWE-130)
-					if (bytesRead > 0) {
-						if (recognizer.acceptWaveForm(buffer, bytesRead)) {
-							String result = recognizer.getResult();
-							JsonNode resultJson = mapper.readTree(result);
-							String text = resultJson.get("text").asText();
-							if (!text.trim().isEmpty()) {
-								if (transcriptionResult.length() > 0) {
-									transcriptionResult.append(" ");
-								}
-								transcriptionResult.append(text.trim());
-								logger.debug("Partial result: " + text);
-							}
-						}
-					}
+				// SECURITY: Validate input parameters before processing
+				if (buffer == null || buffer.length == 0) {
+					throw new IllegalArgumentException("Invalid buffer for audio processing");
 				}
+				if (audioStream == null) {
+					throw new IllegalStateException("Audio stream is not initialized");
+				}
+				
+			   try {
+				   while (true) {
+					   try {
+						   bytesRead = audioStream.read(buffer);
+						   if (bytesRead == -1) {
+							   logger.debug("Reached end of audio stream");
+							   break; // End of stream reached
+						   }
+						   if (bytesRead <= 0) {
+							   logger.debug("No bytes read from stream, retrying...");
+							   continue; // No valid data read, try again
+						   }
+						   
+						   // SECURITY FIX: Create properly sized array for actual data read
+						   // This addresses CWE-130 and RR_NOT_CHECKED vulnerability
+						   byte[] validData = new byte[bytesRead];
+						   System.arraycopy(buffer, 0, validData, 0, bytesRead);
+						   
+						   // Process only the valid data portion
+						   if (recognizer.acceptWaveForm(validData, bytesRead)) {
+							   String result = mapper.readTree(recognizer.getResult()).get("text").asText();
+							   if (!result.trim().isEmpty()) {
+								   if (transcriptionResult.length() > 0) {
+									   transcriptionResult.append(" ");
+								   }
+								   transcriptionResult.append(result.trim());
+								   logger.debug("Partial result: " + result + " (processed " + bytesRead + " bytes)");
+							   }
+						   }
+					   } catch (IOException e) {
+						   logger.error("Error reading from audio stream: " + e.getMessage(), e);
+						   throw new com.mendix.systemwideinterfaces.MendixRuntimeException("Failed to read audio data: " + e.getMessage(), e);
+					   }
+				   }
+			   } catch (Exception e) {
+				   logger.error("Error during audio stream processing: " + e.getMessage(), e);
+				   throw new com.mendix.systemwideinterfaces.MendixRuntimeException("Audio processing failed: " + e.getMessage(), e);
+			   }
 				
 				// Get final result
 				String finalResult = recognizer.getFinalResult();
