@@ -113,8 +113,12 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 				// Create input stream and skip WAV header if present
 				audioStream = new ByteArrayInputStream(audioBytes);
 				if (audioBytes.length > 44 && isWavFile(audioBytes)) {
-					audioStream.skip(44); // Skip WAV header
-					logger.info("Skipped WAV header for processing");
+					long bytesSkipped = audioStream.skip(44); // Skip WAV header
+					if (bytesSkipped != 44) {
+						logger.warn("Expected to skip 44 bytes for WAV header, but only skipped " + bytesSkipped + " bytes");
+						throw new com.mendix.systemwideinterfaces.MendixRuntimeException("Failed to properly skip WAV header - expected 44 bytes, skipped " + bytesSkipped + " bytes");
+					}
+					logger.info("Skipped WAV header for processing (" + bytesSkipped + " bytes)");
 				}
 				
 				// Process audio in chunks for Vosk
@@ -133,7 +137,7 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 				
 			   try {
 				   while (true) {
-					   try {
+					   try {1
 						   bytesRead = audioStream.read(buffer);
 						   if (bytesRead == -1) {
 							   logger.debug("Reached end of audio stream");
