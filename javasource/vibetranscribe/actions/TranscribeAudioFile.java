@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -137,7 +138,7 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 				
 			   try {
 				   while (true) {
-					   try {1
+					   try {
 						   bytesRead = audioStream.read(buffer);
 						   if (bytesRead == -1) {
 							   logger.debug("Reached end of audio stream");
@@ -155,7 +156,7 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 						   
 						   // Process only the valid data portion
 						   if (recognizer.acceptWaveForm(validData, bytesRead)) {
-							   String result = mapper.readTree(recognizer.getResult()).get("text").asText();
+							   String result = ensureUtf8(mapper.readTree(recognizer.getResult()).get("text").asText());
 							   if (!result.trim().isEmpty()) {
 								   if (transcriptionResult.length() > 0) {
 									   transcriptionResult.append(" ");
@@ -177,7 +178,7 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 				// Get final result
 				String finalResult = recognizer.getFinalResult();
 				JsonNode finalJson = mapper.readTree(finalResult);
-				String finalText = finalJson.get("text").asText();
+				String finalText = ensureUtf8(finalJson.get("text").asText());
 				if (!finalText.trim().isEmpty()) {
 					if (transcriptionResult.length() > 0) {
 						transcriptionResult.append(" ");
@@ -676,6 +677,27 @@ public class TranscribeAudioFile extends UserAction<java.lang.String>
 			logger.warn("Audio conversion failed, using original: " + e.getMessage());
 			return audioBytes;
 		}
+	}
+	/**
+	 * Ensures proper UTF-8 encoding of Vosk transcription output.
+	 * Vosk's JNI layer produces UTF-8 bytes, but the JVM may decode them
+	 * using the platform default charset (often ISO-8859-1), which garbles
+	 * accented characters in languages like French (é, à, ê, ü, etc.).
+	 * This re-encodes the string to guarantee correct UTF-8 output.
+	 */
+	private String ensureUtf8(String text) {
+		if (text == null || text.isEmpty()) return text;
+		try {
+			byte[] bytes = text.getBytes(StandardCharsets.ISO_8859_1);
+			String utf8Text = new String(bytes, StandardCharsets.UTF_8);
+			// Verify it's a valid UTF-8 re-encoding (contains no replacement chars)
+			if (!utf8Text.contains("\uFFFD")) {
+				return utf8Text;
+			}
+		} catch (Exception e) {
+			logger.warn("UTF-8 re-encoding failed, returning original text: " + e.getMessage());
+		}
+		return text; // Return original if re-encoding produces invalid result
 	}
 	// END EXTRA CODE
 }
